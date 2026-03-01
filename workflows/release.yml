@@ -1,0 +1,51 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Rust
+      uses: dtolnay/rust-action@stable
+      with:
+        toolchain: stable
+        profile: minimal
+    
+    - name: Release auria-core
+      run: |
+        cd auria-core
+        cargo publish --allow-dirty
+    
+    - name: Release auria-tensor
+      run: |
+        cd auria-tensor
+        cargo publish --allow-dirty
+    
+    - name: Release auria-router
+      run: |
+        cd auria-router
+        cargo publish --allow-dirty
+    
+    - name: Release auria-execution
+      run: |
+        cd auria-execution
+        cargo publish --allow-dirty
+    
+    - name: Release auria-license
+      run: |
+        cd auria-license
+        cargo publish --allow-dirty
+    
+    - name: Release auria-settlement
+      run: |
+        cd auria-settlement
+        cargo publish --allow-dirty
