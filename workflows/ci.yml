@@ -2,131 +2,180 @@ name: CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main ]
+    branches: [main, develop]
 
 env:
   CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
 
 jobs:
-  test:
-    name: Test Suite
+  # Check formatting and basic validation
+  check:
+    name: Check (fmt + clippy)
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 30
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Install Rust
-      uses: dtolnay/rust-action@stable
-      with:
-        toolchain: stable
-        components: rustfmt, clippy
-    
-    - name: Cache cargo registry
-      uses: actions/cache@v4
-      with:
-        path: ~/.cargo/registry
-        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-    
-    - name: Cache cargo index
-      uses: actions/cache@v4
-      with:
-        path: ~/.cargo/git
-        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-    
-    - name: Cache cargo build
-      uses: actions/cache@v4
-      with:
-        path: target
-        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
-    
-    - name: Run unit tests - auria-core
-      run: cd auria-core && cargo test --lib
-    
-    - name: Run unit tests - auria-tensor
-      run: cd auria-tensor && cargo test --lib
-    
-    - name: Run unit tests - auria-router
-      run: cd auria-router && cargo test --lib
-    
-    - name: Run unit tests - auria-execution
-      run: cd auria-execution && cargo test
-    
-    - name: Run unit tests - auria-node
-      run: cd auria-node && cargo test --lib
-    
-    - name: Run unit tests - auria-license
-      run: cd auria-license && cargo test --lib
-    
-    - name: Run unit tests - auria-settlement
-      run: cd auria-settlement && cargo test --lib
-    
-    - name: Run integration tests - auria-execution
-      run: cd auria-execution && cargo test --test inference_pipeline
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-  clippy:
-    name: Clippy Lints
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-action@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings -A dead_code -A unused-versions
+
+  # Build and test on stable Rust
+  build-stable:
+    name: Build (stable)
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 60
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Install Rust
-      uses: dtolnay/rust-action@stable
-      with:
-        toolchain: stable
-        components: clippy
-    
-    - name: Run clippy
-      run: |
-        cargo clippy --workspace --all-targets --all-features -- -D warnings -A dead_code
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-  rustfmt:
-    name: Rust Format
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-action@stable
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache Cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache Cargo build
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-build-target-
+
+      - name: Check all targets
+        run: cargo check --all-targets --all-features
+
+      - name: Build release
+        run: cargo build --release --workspace --all-features
+
+  # Run tests on stable Rust
+  test-stable:
+    name: Test (stable)
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 60
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Install Rust
-      uses: dtolnay/rust-action@stable
-      with:
-        toolchain: stable
-        components: rustfmt
-    
-    - name: Check formatting
-      run: cargo fmt --all -- --check
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-  doc:
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-action@stable
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache Cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache Cargo build
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-test-target-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-test-target-
+
+      - name: Run tests
+        run: cargo test --workspace --all-features
+
+  # Build and test on nightly Rust (for clippy warnings)
+  build-nightly:
+    name: Build (nightly)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust nightly
+        uses: dtolnay/rust-action@nightly
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache Cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache Cargo build
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-nightly-target-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-nightly-target-
+
+      - name: Check with nightly
+        run: cargo check --all-targets --all-features
+
+      - name: Run nightly clippy
+        run: cargo +nightly clippy --all-targets --all-features -- -D warnings -A dead_code -A unused-versions
+
+  # MSRV check
+  msrv:
+    name: MSRV Check (1.70)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust 1.70
+        uses: dtolnay/rust-action@1.70.0
+
+      - name: Check MSRV compatibility
+        run: cargo check --workspace
+
+  # Doc check
+  docs:
     name: Documentation
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 30
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Install Rust
-      uses: dtolnay/rust-action@stable
-      with:
-        toolchain: stable
-    
-    - name: Build documentation
-      run: cargo doc --workspace --no-deps --document-private-items
-      env:
-        RUSTDOCFLAGS: -D warnings
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-  bench:
-    name: Benchmarks
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Install Rust
-      uses: dtolnay/rust-action@stable
-      with:
-        toolchain: stable
-    
-    - name: Run benchmarks
-      run: cd auria-tensor && cargo bench --no-run
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-action@stable
+
+      - name: Build documentation
+        run: cargo doc --workspace --no-deps --all-features
+        env:
+          RUSTDOCFLAGS: -D warnings
+
+      - name: Check documentation links
+        run: cargo doc --workspace --no-deps --document-private-items --all-features
+        env:
+          RUSTDOCFLAGS: -D warnings
